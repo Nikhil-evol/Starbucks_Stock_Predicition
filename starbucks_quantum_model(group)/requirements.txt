@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+pydantic
+tensorflow
+pandas
+numpy
+scikit-learn
+yfinance
+pydot
+graphviz
+matplotlib
+pennylane
+pennylane-qiskit
+
