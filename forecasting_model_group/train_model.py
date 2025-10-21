@@ -63,7 +63,7 @@ def main():
     weights = pnp.random.uniform(low=0, high=np.pi, size=weight_shapes["weights"], requires_grad=True)
 
     opt = qml.GradientDescentOptimizer(stepsize=0.05)
-    epochs = 60
+    epochs = 10
 
     for epoch in range(epochs):
         total_loss = 0
@@ -81,6 +81,32 @@ def main():
     os.makedirs(MODEL_DIR, exist_ok=True)
     joblib.dump({"weights": weights, "scaler": scaler}, os.path.join(MODEL_DIR, MODEL_NAME))
     print("Quantum model and scaler saved successfully!")
+    
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(df.index, df['Close'], label='Original Close Price')
+    plt.title("Starbucks Stock Prices (Training Data)")
+    plt.xlabel("Date")
+    plt.ylabel("Close Price (USD)")
+    plt.legend()
+    plt.show()
+
+
+    print("📊 Raw data sample (first 5 rows):")
+    print(df.head())
+
+    print("\n🔹 Scaled data sample (first 10 values):")
+    print(scaled_data[:10])
+
+    print("\n🧠 Example training pairs (X → y):")
+    for i in range(5):
+     print(f"X[{i}] = {X[i]}  -->  y[{i}] = {y[i]}")
+    
+
+
+    
 
 if __name__ == "__main__":
     main()
+
