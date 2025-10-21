@@ -12,7 +12,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import TensorBoard
-from quantum_model import build_quantum_model
+from model_utils import build_quantum_model
 
 MODEL_DIR = "saved_models"
 MODEL_NAME = "lstm_stock_model.keras"
@@ -36,16 +36,7 @@ def create_dataset(series, window_size):
         y.append(y_seq)
     return np.array(X), np.array(y)
 
-def build_lstm_model(input_shape):
-    model = Sequential([
-        LSTM(50, return_sequences=True, input_shape=input_shape),
-        Dropout(0.2),
-        LSTM(50),
-        Dropout(0.2),
-        Dense(7)  
-    ])
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='mean_squared_error')
-    return model
+# The classical+quantum model builder lives in model_utils.build_hybrid_model
 
 def main():
     df = download_stock_data(ticker="SBUX", period="5y")
@@ -70,12 +61,8 @@ def main():
     X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
     X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
 
-    # Use a hybrid quantum-classical model instead of the LSTM
-    try:
-        model = build_quantum_model((window_size, 1), n_qubits=6, n_q_layers=2)
-    except Exception as e:
-        print("Failed to build quantum model, falling back to classical LSTM. Error:", e)
-        model = build_lstm_model((window_size, 1))
+    # Build pure quantum model (minimal classical preprocessing -> quantum circuit -> 7-day output)
+    model = build_quantum_model(window_size)
    
     tensorboard_callback = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True)
 
@@ -83,7 +70,14 @@ def main():
 
     if not os.path.exists(MODEL_DIR):
         os.makedirs(MODEL_DIR)
-    model.save(os.path.join(MODEL_DIR, MODEL_NAME))
+    # Save weights only (PennyLane KerasLayer is not always serializable as a full SavedModel).
+    weights_path = os.path.join(MODEL_DIR, MODEL_NAME + ".weights.h5")
+    model.save_weights(weights_path)
+
+    # Also save a tiny metadata file with chosen window size so the model can be rebuilt for inference.
+    meta_path = os.path.join(MODEL_DIR, MODEL_NAME + ".meta")
+    with open(meta_path, "w") as f:
+        f.write(str(window_size))
 
     import joblib
     joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.pkl"))

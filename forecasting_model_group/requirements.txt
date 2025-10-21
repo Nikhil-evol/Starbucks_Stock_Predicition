@@ -9,6 +9,7 @@ yfinance
 pydot
 graphviz
 matplotlib
+
+# PennyLane is optional; if installed the code will use a small hybrid quantum layer
 pennylane
-pennylane-qiskit
 
