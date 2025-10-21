@@ -3,86 +3,84 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
-import os
-import numpy as np
-import pandas as pd
-import yfinance as yf
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import TensorBoard
-from model_utils import build_quantum_model
+import joblib
+import pennylane as qml
+from pennylane import numpy as pnp
 
 MODEL_DIR = "saved_models"
-MODEL_NAME = "lstm_stock_model.keras"
+MODEL_NAME = "quantum_stock_model.pkl"
 
-def download_stock_data(ticker="SBUX", period="7y"):  
-    df = yf.download(ticker, period=period, interval="1d")
-    df = df[['Close']]
-
-    all_dates = pd.date_range(start=df.index.min(), end=df.index.max(), freq='D')
+def download_stock_data(ticker="SBUX", period="7y"):
+    df = yf.download(ticker, period=period, interval="1d")[["Close"]]
+    all_dates = pd.date_range(start=df.index.min(), end=df.index.max(), freq="D")
     df = df.reindex(all_dates)
     df.ffill(inplace=True)
     return df
 
 def create_dataset(series, window_size):
     X, y = [], []
-    for i in range(len(series) - window_size - 7 + 1):
-        
-        X.append(series[i:(i + window_size)])
-        
-        y_seq = series[(i + window_size):(i + window_size + 7)].reshape(-1)
-        y.append(y_seq)
+    for i in range(len(series) - window_size - 1):
+        X.append(series[i:i+window_size])
+        y.append(series[i+window_size])
     return np.array(X), np.array(y)
 
-# The classical+quantum model builder lives in model_utils.build_hybrid_model
+def build_quantum_model(n_qubits, n_layers):
+    dev = qml.device("default.qubit", wires=n_qubits)
+
+    @qml.qnode(dev)
+    def circuit(inputs, weights):
+        # Encode classical data
+        for i in range(n_qubits):
+            qml.RX(inputs[i], wires=i)
+        # Variational layers
+        for l in range(n_layers):
+            for i in range(n_qubits):
+                qml.RY(weights[l, i], wires=i)
+            for i in range(n_qubits - 1):
+                qml.CNOT(wires=[i, i + 1])
+        return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
+
+    # Weight shapes for training
+    weight_shapes = {"weights": (n_layers, n_qubits)}
+    return circuit, weight_shapes
 
 def main():
-    df = download_stock_data(ticker="SBUX", period="5y")
-    pd.DataFrame(df).to_csv('SBUX.csv')
-    scaler = MinMaxScaler(feature_range=(0, 1))
+    df = download_stock_data("SBUX", "5y")
+    pd.DataFrame(df).to_csv("SBUX.csv")
+
+    scaler = MinMaxScaler(feature_range=(0, np.pi))
     scaled_data = scaler.fit_transform(df.values)
-    
-   
-    train_size = int(len(scaled_data) * 0.7)
-    train_data = scaled_data[:train_size]
-    test_data = scaled_data[train_size:]
-    
-    window_size = 365  
-    X_train, y_train = create_dataset(train_data, window_size)
-    X_test, y_test = create_dataset(test_data, window_size)
 
-    if X_train.size == 0 or y_train.size == 0:
-        raise ValueError("Insufficient data for training set.")
-    if X_test.size == 0 or y_test.size == 0:
-        raise ValueError("Insufficient data for testing set.")
-    
-    X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
-    X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+    window_size = 4
+    n_qubits = window_size
+    n_layers = 2
 
-    # Build pure quantum model (minimal classical preprocessing -> quantum circuit -> 7-day output)
-    model = build_quantum_model(window_size)
-   
-    tensorboard_callback = TensorBoard(log_dir='./logs', histogram_freq=1, write_graph=True)
+    X, y = create_dataset(scaled_data.flatten(), window_size)
+    X = pnp.array(X)
+    y = pnp.array(y)
 
-    model.fit(X_train, y_train, epochs=100, batch_size=32, validation_data=(X_test, y_test),  callbacks=[tensorboard_callback])
+    circuit, weight_shapes = build_quantum_model(n_qubits, n_layers)
+    weights = pnp.random.uniform(low=0, high=np.pi, size=weight_shapes["weights"], requires_grad=True)
 
-    if not os.path.exists(MODEL_DIR):
-        os.makedirs(MODEL_DIR)
-    # Save weights only (PennyLane KerasLayer is not always serializable as a full SavedModel).
-    weights_path = os.path.join(MODEL_DIR, MODEL_NAME + ".weights.h5")
-    model.save_weights(weights_path)
+    opt = qml.GradientDescentOptimizer(stepsize=0.05)
+    epochs = 60
 
-    # Also save a tiny metadata file with chosen window size so the model can be rebuilt for inference.
-    meta_path = os.path.join(MODEL_DIR, MODEL_NAME + ".meta")
-    with open(meta_path, "w") as f:
-        f.write(str(window_size))
+    for epoch in range(epochs):
+        total_loss = 0
+        for xi, yi in zip(X, y):
+            def cost_fn(w):
+                preds = circuit(xi, w)
+                return (pnp.mean(preds) - yi) ** 2
 
-    import joblib
-    joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.pkl"))
+            weights, loss = opt.step_and_cost(cost_fn, weights)
+            total_loss += loss
 
-    print("Model and scaler saved successfully.")
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch}, Loss: {total_loss/len(X):.6f}")
+
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    joblib.dump({"weights": weights, "scaler": scaler}, os.path.join(MODEL_DIR, MODEL_NAME))
+    print("Quantum model and scaler saved successfully!")
 
 if __name__ == "__main__":
     main()

@@ -7,83 +7,74 @@
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <div class="container">
-      <div class="header">
-        <div class="logo">
-          <!-- simple stock svg -->
-          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 17h3l3-5 4 6 4-10 4 9" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="app-wrap">
+      <header class="nav-top">
+        <div class="nav-inner container">
+          <div class="nav-brand">
+            <svg class="logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M3 17h3l3-5 4 6 4-10 4 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div>
+              <div class="brand-title">Starry Stocks</div>
+              <div class="brand-sub">Forecasts & insights</div>
+            </div>
+          </div>
+          <div class="nav-actions">
+            <a href="#prediction" class="btn small">Make a prediction</a>
+          </div>
         </div>
-        <div>
-          <div class="title">AI Stock Price Forecasting</div>
-          <div class="subtitle">Enter how many future days you'd like to forecast</div>
-        </div>
-      </div>
+      </header>
 
-      <!-- Intro / hero that explains the model in a creative way -->
-      <section class="intro">
-        <h2 class="hero">Meet the oracle for Stock Prices ✨</h2>
-        <p class="lead">A smart, lightweight LSTM model trained on past market trends — it listens to the patterns in closing prices and predicts the next move with a natural flow.</p>
-        <button id="startBtn" class="start">Open prediction box</button>
-      </section>
+      <main class="container layout-wide">
+        <section class="hero-card card">
+          <h1 class="hero-title">Forecast with confidence</h1>
+          <p class="hero-sub">A lightweight model trained on historical closing prices to generate short-term forecasts. Beautifully simple, responsibly used.</p>
+          <div class="hero-cta">
+            <a href="#prediction" class="btn primary">Try a prediction</a>
+            <a href="#" class="btn outline">Learn more</a>
+          </div>
+        </section>
 
-      <div class="prediction-panel" id="predictionPanel" aria-hidden="true">
-      <form method="post" action="/predict_form">
-        <div class="form-row">
-          <select name="company" id="company" style="padding:12px 14px; border-radius:10px; background:transparent; color:inherit; border:1px solid rgba(255,255,255,0.04)">
-            {% for c in companies %}
-              <option value="{{ c }}" {% if c == company %}selected{% endif %}>{{ c }}</option>
-            {% endfor %}
-          </select>
-          <input type="number" id="days" name="days" min="1" max="365" value="0" required>
-          <button type="submit">Predict</button>
-        </div>
-      </form>
-      </div>
+        <aside id="prediction" class="card sticky-card">
+          <h3 class="card-title">Predict future prices</h3>
+          <form method="post" action="/predict_form" class="predict-form">
+            <label class="label">Company</label>
+            <select name="company" class="input">
+              {% for c in companies %}
+                <option value="{{ c }}" {% if c == company %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
 
-      {% if error %}
-        <div class="result"><strong>Error:</strong> {{ error }}</div>
-      {% endif %}
+            <label class="label">Days</label>
+            <input type="number" name="days" min="1" max="365" value="7" class="input" required />
 
-      {% if predictions %}
-        <div class="result">
-          <h3>Predicted Prices for {{ company }}</h3>
-          <ol>
-            {% for p in predictions %}
-              <li>{{ p }}$</li>
-            {% endfor %}
-          </ol>
-        </div>
-      {% endif %}
+            <div class="form-actions">
+              <button type="submit" class="btn primary wide">Predict</button>
+            </div>
+          </form>
+        </aside>
 
-      <div class="footer">Model trained on historical data of the company. Predictions are estimates, not financial advice.</div>
+        <section class="card results-area">
+          {% if error %}
+            <div class="notice error">{{ error }}</div>
+          {% endif %}
+
+          {% if predictions %}
+            <div class="result-list">
+              <h3>Predicted prices for {{ company }}</h3>
+              <ul>
+                {% for p in predictions %}
+                  <li>{{ loop.index }} — <strong>{{ p }} $</strong></li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% else %}
+            <p class="muted">Enter a company and the number of days to forecast. Results will appear here.</p>
+          {% endif %}
+        </section>
+      </main>
+
+      <footer class="site-foot">
+        <div class="container">© {{ year }} Starry Stocks — predictions are estimates and not financial advice.</div>
+      </footer>
     </div>
-  
-
-    <script>
-      // Reveal prediction panel when start button is clicked
-      const startBtn = document.getElementById('startBtn');
-      const panel = document.getElementById('predictionPanel');
-      if (startBtn && panel) {
-        startBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          panel.classList.add('visible');
-          panel.setAttribute('aria-hidden','false');
-          startBtn.style.opacity = '0';
-          setTimeout(()=> startBtn.style.display='none', 400);
-        });
-      }
-      const cursor = document.getElementById('cursor');
-      if (cursor) {
-        document.addEventListener('mousemove', (e) => {
-          cursor.style.transform = `translate3d(${e.clientX - 10}px, ${e.clientY - 10}px, 0)`;
-        });
-        // subtle hover effect on interactive elements
-        const interactive = document.querySelectorAll('button, input, select');
-        interactive.forEach(el => {
-          el.addEventListener('mouseenter', ()=> cursor.classList.add('grow'));
-          el.addEventListener('mouseleave', ()=> cursor.classList.remove('grow'));
-        });
-      }
-    </script>
   </body>
 </html>
