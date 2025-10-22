@@ -63,7 +63,7 @@ def main():
     weights = pnp.random.uniform(low=0, high=np.pi, size=weight_shapes["weights"], requires_grad=True)
 
     opt = qml.GradientDescentOptimizer(stepsize=0.05)
-    epochs = 10
+    epochs = 100
 
     for epoch in range(epochs):
         total_loss = 0
