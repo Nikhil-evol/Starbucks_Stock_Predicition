@@ -12,6 +12,9 @@ BASE_DIR = os.path.dirname(__file__)
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
+# Ensure model directories exist
+os.makedirs(os.path.join(BASE_DIR, "saved_models"), exist_ok=True)
+
 COMPANIES = ["SBUX"]
 
 # Model utilities are imported lazily inside the prediction endpoint so the
