@@ -1,11 +1,12 @@
+
 from fastapi import FastAPI, Request
 import datetime
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
-import pandas as pd
 import os
+import pandas as pd
 
 app = FastAPI()
 BASE_DIR = os.path.dirname(__file__)
@@ -14,9 +15,7 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 
 COMPANIES = ["SBUX"]
 
-# Model utilities are imported lazily inside the prediction endpoint so the
-# application can start even if heavy quantum/TensorFlow dependencies are
-# missing or saved model files are not present.
+# Model utilities are imported lazily inside the prediction endpoint
 model = None
 weights = None
 scaler = None
@@ -37,10 +36,11 @@ async def predict_form(request: Request):
         form = await request.form()
         company = form.get('company', 'SBUX')
         days = int(form.get('days', 7))
-        # Lazy import to avoid startup failures when quantum libs or saved models are missing
-        from model_utils import load_model_and_scaler, predict_n_days
 
+        # Lazy import to avoid startup failures
+        from model_utils import load_model_and_scaler, predict_n_days
         global model, weights, scaler
+
         if model is None or weights is None or scaler is None:
             try:
                 model, scaler, weights = load_model_and_scaler()
@@ -50,6 +50,8 @@ async def predict_form(request: Request):
                     {"request": request, "error": f"Model load failed: {e}", 
                      "companies": COMPANIES, "company": company, "year": datetime.datetime.now().year}
                 )
+
+        # Load CSV
         csv_path = os.path.join(os.path.dirname(__file__), f"{company}.csv")
         if not os.path.exists(csv_path):
             return templates.TemplateResponse(
@@ -58,16 +60,23 @@ async def predict_form(request: Request):
                  "companies": COMPANIES, "company": company, "year": datetime.datetime.now().year}
             )
 
-        df = pd.read_csv(csv_path, index_col=0, parse_dates=True)
-        if "Close" not in df.columns:
+        df = pd.read_csv(csv_path, index_col=0)
+        # Ensure proper datetime parsing
+        df.index = pd.to_datetime(df.index, format="%Y-%m-%d", errors="coerce")
+        df.ffill(inplace=True)  # fill missing dates
+
+        if 'Close' not in df.columns:
             return templates.TemplateResponse(
                 "index.html",
                 {"request": request, "error": "CSV does not contain 'Close' column.",
                  "companies": COMPANIES, "company": company, "year": datetime.datetime.now().year}
             )
+        df = df[['Close']]
+
+        print("✅ CSV loaded successfully. Date range:", df.index.min(), "to", df.index.max())
 
         closes = df["Close"].dropna().tolist()
-        window_size = 4  # quantum model uses 4 qubits
+        window_size = 4
         if len(closes) < window_size:
             return templates.TemplateResponse(
                 "index.html",
@@ -79,16 +88,20 @@ async def predict_form(request: Request):
         preds = predict_n_days(model=model, scaler=scaler, q_weights=weights,
                                recent_data=recent, window_size=window_size, n_days=days)
         preds_rounded = [f"{x:.2f}" for x in preds]
+
         return templates.TemplateResponse(
             "index.html",
-            {"request": request, "predictions": preds_rounded, "companies": COMPANIES, "company": company, "year": datetime.datetime.now().year}
+            {"request": request, "predictions": preds_rounded, "companies": COMPANIES,
+             "company": company, "year": datetime.datetime.now().year}
         )
     except Exception as e:
         return templates.TemplateResponse(
             "index.html",
-            {"request": request, "error": str(e), "companies": COMPANIES, "company": company, "year": datetime.datetime.now().year}
+            {"request": request, "error": str(e), "companies": COMPANIES,
+             "company": company, "year": datetime.datetime.now().year}
         )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="127.0.0.1", port=port)
+
