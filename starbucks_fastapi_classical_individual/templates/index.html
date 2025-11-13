@@ -13,9 +13,12 @@
           <!-- simple stock svg -->
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 17h3l3-5 4 6 4-10 4 9" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
-        <div>
+        <div style="flex-grow: 1;">
           <div class="title">AI Stock Price Forecasting</div>
           <div class="subtitle">Enter how many future days you'd like to forecast</div>
+        </div>
+        <div>
+          <button id="logoutBtn" class="btn-logout" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #e6eef6; padding: 8px 16px; border-radius: 8px; cursor: pointer;">Logout</button>
         </div>
       </div>
 
@@ -85,5 +88,25 @@
         });
       }
     </script>
+      <script>
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+          try {
+            const response = await fetch('/api/logout', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            if (response.ok) {
+              window.location.href = '/login';
+            } else {
+              console.error('Logout failed');
+            }
+          } catch (error) {
+            console.error('Error during logout:', error);
+          }
+        });
+      </script>
   </body>
 </html>
